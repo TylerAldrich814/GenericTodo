@@ -1,0 +1,198 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  A Very Generic, and simple TODO Backend.
+
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 128
+    Runtime: provided.al2
+    Architectures:
+      - x86_64
+Resources:
+# --> Common Role Properies<-- ------------------------------------------------
+  CommonRoleProperties: &commonRoleProperties
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+# --> Todo DynamoDB <-- -------------------------------------------------------
+  TodosTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      Role: !GetAtt TodoExceptionRole.Arn
+      TableName: Todos
+      AttributeDefinitions:
+        - AttributeName: ID
+          AttributeType: S
+      KeySchema:
+        - AttributeName: ID
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+# --> Todo Lambda Functions <-- -----------------------------------------------
+  GetTodosFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt GetTodoFunctionRole
+      CodeUri: getTodo/
+      Handler: getTodo.go
+      Events:
+        PostEvent:
+          Type: Api
+          Properties:
+            Path: /todos
+            Method: POST
+  CreateTodoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt CreateTodoRole
+      CodeUri: createTodo/
+      Handler: createTodo.go
+      Events:
+        PostEvent:
+          Type: Api
+          Properties:
+            Path: /todos
+            Method: GET
+  UpdateTodoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt UpdateTodoRole
+      CodeUri: updateTodo/
+      Handler: updateTodo.go
+      Events:
+        PostEvent:
+          Type: Api
+          Properties:
+            Path: /todos{id}
+            Method: PUT
+  DeleteTodoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt DeleteTodoRole
+      CodeUri: deleteTodo/
+      Handler: deleteTodo.go
+      Events:
+        PostEvent:
+          Type: Api
+          Properties:
+            Path: /todos{id}
+            Method: DELETE
+
+# --> Todo API Gateway <-- ----------------------------------------------------
+  TodoAPI:
+    Type: AWS::Serverless::HttpApi
+    Properties:
+      DefinitionBody:
+        openapi: "3.0.1"
+        paths:
+          /todos:
+            POST:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                uri: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${GetTodoFunction.Arn}/invocations
+            GET:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                uri: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${CreateTodoFunction.Arn}/invocations
+          /todos{ID}:
+            PUT:
+              x-amazon-apigateway-integration:
+                httpMethod: POST
+                uri: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${UpdateTodoFunction.Arn}/invocations
+            DELETE:
+            x-amazon-apigateway-integration:
+                httpMethod: POST
+                uri: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DeleteTodoFunction.Arn}/invocations
+# --> Todo Function Permissions <-- -------------------------------------------
+  GetTodoFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GetTodosFunction
+      Principal: apigateway.amazonaws.com
+  CreateTodoFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CreateTodoFunction
+      Principal: apigateway.amazonaws.com
+  UpdateTodoFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref UpdateTodoFunction
+      Principal: apigateway.amazonaws.com
+  DeleteTodoFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref DeleteTodoFunction
+      Principal: apigateway.amazonaws.com
+# --> Todo Function Roles <-- -------------------------------------------------
+  GetTodoFunctionRole:
+    <<: *commonRoleProperties
+    Policies:
+      - PolicyName: DynamoDBAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource: !GetATt TodosTable.Arn
+  CreateTodoRole:
+    <<: *commonRoleProperties
+    Policies:
+      - PolicyName: DynamoDBAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:PutItem
+                - dynamodb:Scan
+              Resource: !GetATt TodosTable.Arn
+  UpdateTodoRole:
+    <<: *commonRoleProperties
+    Policies:
+      - PolicyName: DynamoDBAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:UpdateItem
+                - dynamodb:Scan
+              Resource: !GetATt TodosTable.Arn
+  DeleteTodoRole:
+    <<: *commonRoleProperties
+    Policies:
+      - PolicyName: DynamoDBAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:Delete
+                - dynamodb:Scan
+              Resource: !GetATt TodosTable.Arn
+Outputs:
+  TodoApiEndpoint:
+    Description: The URL of API Endpoint for managing Todos.
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
