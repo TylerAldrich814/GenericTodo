@@ -8,8 +8,8 @@ import (
 )
 
 type DatabaseResponse = events.APIGatewayProxyResponse
-type DatabaseRequest = events.APIGatewayProxyRequest
-const TODOTABLENAME = "Todos"
+type DatabaseRequest  = events.APIGatewayProxyRequest
+const TODOTABLENAME   = "Todos"
 
 // Response: Struct for handling our events.APIGatewayProxyResponse's.
 //    Every Response will contain A Message and a StatusCode
@@ -37,7 +37,6 @@ type Response struct {
 
 func(resp *Response)AddMessage(msg string) *Response{
   resp.Message = msg
-
   return resp
 }
 func(resp *Response)AddBody(body []byte) *Response{
@@ -86,7 +85,7 @@ type DBItem interface {
 //   $ Body    -> string    :: The Information for our Tofo.
 //   $ DueDate -> time.Time :: When our Todo is due.
 type Todo struct {
-  ID      string       `json:"id"`
+  ID      string    `json:"id"`
   Title   string    `json:"title"`
   Body    string    `json:"body"`
   DueDate time.Time `json:"due_date"`
